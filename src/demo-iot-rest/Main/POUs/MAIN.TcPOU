@@ -1,0 +1,89 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.12">
+  <POU Name="MAIN" Id="{bb060100-7ae6-4719-b1ce-cc5bd1204cf6}" SpecialFunc="None">
+    <Declaration><![CDATA[PROGRAM MAIN
+VAR
+	
+	httpClient : FB_IotHttpClient :=(sHostName:='localhost',bKeepAlive:=TRUE, tConnectionTimeout:=T#10S);
+	request : FB_IotHttpRequest;
+	trigger : BOOL;
+	state : (IDLE, SEND_REQUEST,MAKE_HEADER,MAKE_JSON,WAIT_FOR_RESPONSE,READ_RESPONSE,ERROR);
+	debugRequestContent : STRING(511);
+	
+	jsonParser : FB_JsonDomParser;
+	jsonDocument : SJsonValue;
+	
+	results : STRING;
+	
+	myDataAsString : STRING(300) := 'This is my data';
+	
+	header : FB_IotHttpHeaderFieldMap;
+	 
+
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[IF NOT httpClient.bConfigured THEN
+    httpClient.nHostPort:= 3000;
+END_IF
+
+IF httpClient.bConfigured THEN
+	
+	CASE state OF
+		
+	IDLE: 
+		
+		IF trigger THEN
+			state := MAKE_HEADER;
+			trigger := FALSE;
+		END_IF
+		
+	MAKE_HEADER : 
+		
+	
+		header.AddField('codingbytesheader','1234',TRUE);
+		header.AddField('codingbytesheader1','abcde',TRUE);
+		
+		state := MAKE_JSON;	
+		
+		
+	MAKE_JSON : 
+	
+		jsonDocument := jsonParser.NewDocument();	
+		jsonParser.AddIntMember(jsonDocument,'myInt',123);
+		state := SEND_REQUEST;	
+	
+	SEND_REQUEST : 
+	
+		IF request.SendJsonDomRequest(sUri:= '/dayofweek',fbClient:= httpClient,eRequestType:= ETcIotHttpRequestType.HTTP_GET,jsonParser, header) THEN
+			state := WAIT_FOR_RESPONSE;
+		END_IF
+		
+	WAIT_FOR_RESPONSE : 
+	
+		IF NOT request.bBusy THEN
+			state := READ_RESPONSE;
+		END_IF
+		
+		IF request.bError THEN
+			state := ERROR;
+		END_IF
+
+	READ_RESPONSE : 
+	
+		request.GetContent(pContent:= ADR(debugRequestContent),nContentSize:= SIZEOF(debugRequestContent),bSetNullTermination:= TRUE);
+		
+		state := IDLE;
+	
+	ERROR :
+	
+		//
+		
+	END_CASE
+
+END_IF
+
+httpClient.Execute();]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>
